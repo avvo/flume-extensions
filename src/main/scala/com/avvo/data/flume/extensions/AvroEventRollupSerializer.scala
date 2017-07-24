@@ -67,11 +67,10 @@ class AvroEventRollupSerializer(out: OutputStream) extends EventSerializer with 
   def loadSchema(schemaFilePath: String): Schema = {
     logger.debug(s"""Schema Path: "$schemaFilePath"""")
     if (schemaFilePath.toLowerCase.startsWith("hdfs://")) {
-      using(FileSystem.get(new Configuration())) { fs =>
-        using(fs.open(new Path(schemaFilePath))) { is =>
-          val parser = new Schema.Parser()
-          parser.parse(is)
-        }
+      val fs = FileSystem.get(new Configuration())
+      using(fs.open(new Path(schemaFilePath))) { is =>
+        val parser = new Schema.Parser()
+        parser.parse(is)
       }
     } else {
       throw new FlumeException(s"""Schema file path should begin with HDFS: "$schemaFilePath"""")

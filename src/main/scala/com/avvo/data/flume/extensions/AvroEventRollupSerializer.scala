@@ -40,8 +40,8 @@ object AvroEventRollupSerializer {
 
   class Builder extends EventSerializer.Builder {
     override def build(context: Context, out: OutputStream): EventSerializer = {
-      new AvroEventRollupSerializer(out) tap {
-        _.configure(context)
+      new AvroEventRollupSerializer(out) tap { (ser: AvroEventRollupSerializer) =>
+        ser.configure(context)
       }
     }
   }

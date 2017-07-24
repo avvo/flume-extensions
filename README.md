@@ -5,4 +5,4 @@ AvroEventRollupSerializer
 
 
 #### Build
-sbt assembly
+./script/cibuild

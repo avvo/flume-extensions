@@ -1,2 +1,8 @@
 # flume-extensions
-extensions (serializers, interceptors, etc) for flume use by the data team
+Extensions (serializers, interceptors, etc) for Apache Flume used by the Data team
+
+AvroEventRollupSerializer
+
+
+#### Build
+./script/cibuild

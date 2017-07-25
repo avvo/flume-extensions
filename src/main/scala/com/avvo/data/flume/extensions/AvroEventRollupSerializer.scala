@@ -72,6 +72,7 @@ class AvroEventRollupSerializer(out: OutputStream) extends EventSerializer with 
         val parser = new Schema.Parser()
         parser.parse(is)
       }
+      // don't need to close FileSystem here since it will close file system on upper level
     } else {
       throw new FlumeException(s"""Schema file path should begin with HDFS: "$schemaFilePath"""")
     }

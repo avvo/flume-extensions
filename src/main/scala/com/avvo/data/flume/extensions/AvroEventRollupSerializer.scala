@@ -50,34 +50,16 @@ object AvroEventRollupSerializer {
 
 class AvroEventRollupSerializer(out: OutputStream) extends EventSerializer with Configurable with LazyLogging {
 
-  import AvroEventRollupSerializer._
-
   var context: Option[Context] = None
-
+  var schema: Option[Schema] = None
+  var count = 1
   lazy val compressionCodec  = context.get.getString(COMPRESSION_CODEC, DEFAULT_COMPRESSION_CODEC)
   lazy val syncIntervalBytes = context.get.getInteger(SYNC_INTERVAL_BYTES, DEFAULT_SYNC_INTERVAL_BYTES)
-  lazy val schemaPath        = context.get.getString(AvroSchemaPath)
   lazy val dataFileWriter    = initialize()
 
   val reader = new GenericDatumReader[AnyRef]
 
   override def configure(context: Context): Unit = this.context = Some(context)
-
-  @throws[IOException]
-  def loadSchema(schemaFilePath: String): Schema = {
-    logger.debug(s"""Schema Path: "$schemaFilePath"""")
-    if (schemaFilePath.toLowerCase.startsWith("hdfs://")) {
-      val fs = FileSystem.get(new Configuration())
-      using(fs.open(new Path(schemaFilePath))) { is =>
-        val parser = new Schema.Parser()
-        parser.parse(is)
-      }
-      // Don't need to close FileSystem here since it will close file system on upper level.
-      // AvroEventRollupSerializer will continue to serialize and send data which need schema.
-    } else {
-      throw new FlumeException(s"""Schema file path should begin with HDFS: "$schemaFilePath"""")
-    }
-  }
 
   @throws[IOException]
   override def afterCreate(): Unit = ()
@@ -98,6 +80,13 @@ class AvroEventRollupSerializer(out: OutputStream) extends EventSerializer with 
     }
   }
 
+  def readSchemaFromEvent(flumeEventBody: Array[Byte]): Schema = {
+    val inStream = new ByteArrayInputStream(flumeEventBody)
+    using(new DataFileStream[AnyRef](inStream, reader)) { fileReader =>
+      fileReader.getSchema
+    }
+  }
+
   def readAvroData(flumeEventBody: Array[Byte]): Array[Byte] = {
     val inStream = new ByteArrayInputStream(flumeEventBody)
     using(new DataFileStream[AnyRef](inStream, reader)) { fileReader =>
@@ -107,11 +96,8 @@ class AvroEventRollupSerializer(out: OutputStream) extends EventSerializer with 
 
   @throws[IOException]
   private def initialize(): DataFileWriter[AnyRef] = {
-    if (schemaPath.isEmpty) {
-      throw new FlumeException(s"""schemaPath is not valid: "$schemaPath""")
-    }
-    val schema         = loadSchema(schemaPath)
-    val writer         = new GenericDatumWriter[AnyRef](schema)
+    logger.info(s"schema is defined: ${schema.isDefined}")
+    val writer         = new GenericDatumWriter[AnyRef](schema.get)
     val dataFileWriter = new DataFileWriter(writer)
     dataFileWriter.setSyncInterval(syncIntervalBytes)
 
@@ -122,11 +108,16 @@ class AvroEventRollupSerializer(out: OutputStream) extends EventSerializer with 
       case e: Throwable =>
         logger.warn(s"""Unable to instantiate avro codec with name, "$compressionCodec", compression disabled""", e)
     }
-    dataFileWriter.create(schema, out)
+    dataFileWriter.create(schema.get, out)
   }
 
   @throws[IOException]
   override def write(event: Event): Unit = {
+    logger.info(s"writing event #${count += 1}")
+    if (schema.isEmpty) {
+      logger.info("reading schema from event for first event")
+      schema = Some(readSchemaFromEvent(event.getBody))
+    }
     dataFileWriter.appendEncoded(ByteBuffer.wrap(readAvroData(event.getBody)))
   }
 

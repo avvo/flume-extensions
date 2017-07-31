@@ -114,7 +114,7 @@ class AvroEventRollupSerializer(out: OutputStream) extends EventSerializer with 
   @throws[IOException]
   override def write(event: Event): Unit = {
     logger.info(s"writing event #${count += 1}")
-    if (!schema.isDefined) {
+    if (schema.isEmpty) {
       logger.info("reading schema from event for first event")
       schema = Some(readSchemaFromEvent(event.getBody))
     }
